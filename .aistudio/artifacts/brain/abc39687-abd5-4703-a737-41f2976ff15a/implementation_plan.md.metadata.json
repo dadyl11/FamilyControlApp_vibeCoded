@@ -1,0 +1,6 @@
+{
+  "summary": "Kompleksowy plan wdrożenia Family Control v2.0 (Etap 0 & PoC): analiza wykonalności Android Feasibility na Androidzie 13+, architektura lokalnego launchera dziecka w Kotlin/Jetpack Compose (w katalogu /android), mechanizm bezpiecznego licznika sesji i limitów dziennych, symulator tabletu z interaktywnymi testami obejścia w React/TypeScript oraz scenariusze weryfikacji.",
+  "updatedAt": "2026-10-19T20:13:26.197243788Z",
+  "requestFeedback": true,
+  "userFacing": true
+}

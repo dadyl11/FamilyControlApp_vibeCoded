@@ -1,0 +1,6 @@
+{
+  "name": "Family Control — Android Screen Time PoC",
+  "description": "System kontroli czasu ekranowego na współdzielonym tablecie z Androidem 13+, analiza wykonalności, kod Kotlin/Jetpack Compose oraz symulator obejść.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
