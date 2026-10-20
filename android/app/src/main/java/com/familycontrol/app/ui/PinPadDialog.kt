@@ -3,8 +3,10 @@ package com.familycontrol.app.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,19 +31,21 @@ fun PinPadDialog(
     onDismiss: () -> Unit
 ) {
     var enteredDigits by remember { mutableStateOf("") }
+    val scrollState = rememberScrollState()
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
             modifier = Modifier
-                .fillMaxWidth(0.9f)
-                .padding(16.dp),
+                .fillMaxWidth(0.95f)
+                .padding(8.dp),
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(24.dp),
+                    .verticalScroll(scrollState)
+                    .padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
@@ -49,22 +53,23 @@ fun PinPadDialog(
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = if (isLockedOut) "Blokada bezpieczeństwa!" else "Wprowadź kod PIN, aby wyjść z trybu dziecka",
+                    text = if (isLockedOut) "Blokada bezpieczeństwa!" else "Wprowadź kod PIN (domyślny: 1234)",
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (isLockedOut) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 if (isLockedOut) {
                     Text(
                         text = "Zbyt wiele prób. Spróbuj za ${remainingLockoutSeconds}s",
-                        style = MaterialTheme.typography.headlineMedium,
+                        style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.error
+                        color = MaterialTheme.colorScheme.error,
+                        textAlign = TextAlign.Center
                     )
                 } else {
                     // Wskaźniki wprowadzonych cyfr (dots)
@@ -76,7 +81,7 @@ fun PinPadDialog(
                             val isFilled = i < enteredDigits.length
                             Box(
                                 modifier = Modifier
-                                    .size(20.dp)
+                                    .size(18.dp)
                                     .clip(CircleShape)
                                     .background(
                                         if (isFilled) MaterialTheme.colorScheme.primary
@@ -87,17 +92,18 @@ fun PinPadDialog(
                     }
 
                     if (!errorMessage.isNullOrEmpty()) {
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = errorMessage,
                             color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = TextAlign.Center
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                    // Klawiatura numeryczna 3x4
+                    // Klawiatura numeryczna 3x4 z responsywnym rozmiarem klawiszy
                     val keys = listOf(
                         listOf("1", "2", "3"),
                         listOf("4", "5", "6"),
@@ -113,8 +119,8 @@ fun PinPadDialog(
                             for (key in row) {
                                 Box(
                                     modifier = Modifier
-                                        .size(64.dp)
-                                        .padding(4.dp)
+                                        .size(56.dp)
+                                        .padding(3.dp)
                                         .clip(CircleShape)
                                         .background(
                                             when (key) {
@@ -147,7 +153,7 @@ fun PinPadDialog(
                                 ) {
                                     Text(
                                         text = key,
-                                        fontSize = 20.sp,
+                                        fontSize = 18.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = if (key == "OK") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                                     )
@@ -157,7 +163,7 @@ fun PinPadDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 TextButton(onClick = onDismiss) {
                     Text("Anuluj i wróć")

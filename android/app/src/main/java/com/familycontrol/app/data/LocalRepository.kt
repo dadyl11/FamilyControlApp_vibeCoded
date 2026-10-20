@@ -21,6 +21,7 @@ interface LocalRepository {
     suspend fun saveCheckpoint(checkpoint: SessionCheckpoint)
     suspend fun updatePolicy(policy: ChildPolicy)
     suspend fun setAppAllowed(packageName: String, isAllowed: Boolean)
+    suspend fun syncDetectedInstalledApps(detectedApps: List<AllowedApp>)
     suspend fun logAuditEvent(eventType: String, details: String)
 }
 
@@ -39,9 +40,9 @@ class InMemoryLocalRepository : LocalRepository {
         AllowedApp("com.google.android.apps.youtube.kids", "YouTube Kids", "Wideo i Muzyka", true),
         AllowedApp("org.scratchjr.android", "ScratchJr", "Programowanie", true),
         AllowedApp("com.duolingo", "Duolingo", "Języki obce", true),
-        AllowedApp("org.khankids.android", "Khan Academy Kids", "Edukacja ogólna", true),
-        AllowedApp("com.brak.drawing", "Szkicownik dla dzieci", "Kreatywność", true),
-        AllowedApp("com.android.calculator2", "Kalkulator", "Narzędzia", true)
+        AllowedApp("org.khankids.android", "Khan Academy", "Edukacja ogólna", true),
+        AllowedApp("com.android.chrome", "Chrome", "Przeglądarka", false),
+        AllowedApp("com.google.android.youtube", "YouTube", "Wideo", false)
     )
 
     private val _allowedAppsFlow = MutableStateFlow(defaultApps)
@@ -60,10 +61,37 @@ class InMemoryLocalRepository : LocalRepository {
 
     override suspend fun setAppAllowed(packageName: String, isAllowed: Boolean) {
         val current = _allowedAppsFlow.value
-        _allowedAppsFlow.value = current.map {
+        val updated = current.map {
             if (it.packageName == packageName) it.copy(isEnabled = isAllowed) else it
         }
-        val enabledPackages = _allowedAppsFlow.value.filter { it.isEnabled }.map { it.packageName }.toSet()
+        _allowedAppsFlow.value = updated
+        val enabledPackages = updated.filter { it.isEnabled }.map { it.packageName }.toSet()
+        _policyFlow.value = _policyFlow.value.copy(allowedPackages = enabledPackages)
+    }
+
+    override suspend fun syncDetectedInstalledApps(detectedApps: List<AllowedApp>) {
+        val currentMap = _allowedAppsFlow.value.associateBy { it.packageName }
+        val merged = mutableListOf<AllowedApp>()
+
+        // Dodaj wykryte aplikacje z urządzenia, zachowując stan włączenia jeśli istniały
+        for (detected in detectedApps) {
+            val existing = currentMap[detected.packageName]
+            if (existing != null) {
+                merged.add(existing.copy(displayName = detected.displayName))
+            } else {
+                merged.add(detected)
+            }
+        }
+
+        // Dodaj ewentualne aplikacje z listy domyślnej, których nie ma w detected
+        for (curr in _allowedAppsFlow.value) {
+            if (merged.none { it.packageName == curr.packageName }) {
+                merged.add(curr)
+            }
+        }
+
+        _allowedAppsFlow.value = merged
+        val enabledPackages = merged.filter { it.isEnabled }.map { it.packageName }.toSet()
         _policyFlow.value = _policyFlow.value.copy(allowedPackages = enabledPackages)
     }
 

@@ -1,6 +1,7 @@
 package com.familycontrol.app
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -21,9 +22,11 @@ import com.familycontrol.app.ui.KidsHomeScreen
 import com.familycontrol.app.ui.ParentConfigScreen
 import com.familycontrol.app.ui.PinPadDialog
 import com.familycontrol.app.ui.TimeExpiredScreen
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
 
@@ -46,12 +49,16 @@ class MainActivity : ComponentActivity() {
         // Przechwycenie przycisku Wstecz (Back), aby uniemożliwić zamknięcie launchera przez dziecko
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                // Pozostajemy w launcherze dziecka
                 if (timerEngine.getCurrentState() == SessionState.PARENT_MODE) {
                     timerEngine.exitParentModeToKids()
                 }
             }
         })
+
+        // Skanowanie rzeczywistych aplikacji zainstalowanych na telefonie/tablecie
+        lifecycleScope.launch(Dispatchers.Default) {
+            scanAndSyncDeviceApps()
+        }
 
         // Główna pętla zegarowa
         lifecycleScope.launch {
@@ -59,7 +66,6 @@ class MainActivity : ComponentActivity() {
                 delay(1000L)
                 val state = timerEngine.tick()
                 val remaining = timerEngine.getRemainingSeconds()
-                // Synchronizacja z powiadomieniem Foreground Service
                 if (state != SessionState.PARENT_MODE) {
                     SessionMonitorService.start(this@MainActivity, remaining)
                 }
@@ -77,6 +83,7 @@ class MainActivity : ComponentActivity() {
             var remainingSec by remember { mutableStateOf(timerEngine.getRemainingSeconds()) }
             var isLockedOut by remember { mutableStateOf(pinSecurityManager.isCurrentlyLockedOut()) }
             var remainingLockout by remember { mutableStateOf(pinSecurityManager.getRemainingLockoutSeconds()) }
+            var parentInitialTab by remember { mutableIntStateOf(0) }
 
             // Odświeżanie stanu UI
             LaunchedEffect(Unit) {
@@ -98,6 +105,12 @@ class MainActivity : ComponentActivity() {
                             allowedApps = allowedApps,
                             onAppClick = { app -> launchChildApp(app) },
                             onRequestParentMode = {
+                                parentInitialTab = 0
+                                pinErrorMessage = null
+                                showPinDialog = true
+                            },
+                            onRequestAddApp = {
+                                parentInitialTab = 1 // Przejdź od razu do zakładki "Aplikacje"
                                 pinErrorMessage = null
                                 showPinDialog = true
                             }
@@ -106,6 +119,7 @@ class MainActivity : ComponentActivity() {
                     SessionState.TIME_EXPIRED -> {
                         TimeExpiredScreen(
                             onRequestParentMode = {
+                                parentInitialTab = 0
                                 pinErrorMessage = null
                                 showPinDialog = true
                             }
@@ -117,6 +131,7 @@ class MainActivity : ComponentActivity() {
                             allowedApps = allowedApps,
                             auditEvents = auditEvents,
                             consumedSecondsToday = timerEngine.getConsumedSecondsToday(),
+                            initialTab = parentInitialTab,
                             onUpdatePolicy = { newPolicy ->
                                 lifecycleScope.launch {
                                     repository.updatePolicy(newPolicy)
@@ -126,6 +141,10 @@ class MainActivity : ComponentActivity() {
                             onToggleApp = { pkg, isAllowed ->
                                 lifecycleScope.launch {
                                     repository.setAppAllowed(pkg, isAllowed)
+                                    repository.logAuditEvent(
+                                        "APP_TOGGLE",
+                                        "Zmieniono uprawnienie dla $pkg: $isAllowed"
+                                    )
                                 }
                             },
                             onGrantBonusMinutes = { mins ->
@@ -181,6 +200,40 @@ class MainActivity : ComponentActivity() {
         timerEngine.pauseSession()
     }
 
+    private suspend fun scanAndSyncDeviceApps() {
+        try {
+            val mainIntent = Intent(Intent.ACTION_MAIN, null).apply {
+                addCategory(Intent.CATEGORY_LAUNCHER)
+            }
+            val pkgAppsList = packageManager.queryIntentActivities(mainIntent, 0)
+            val detected = mutableListOf<AllowedApp>()
+
+            for (resolveInfo in pkgAppsList) {
+                val pkgName = resolveInfo.activityInfo.packageName
+                if (pkgName == packageName) continue // Nie pokazuj samego siebie
+
+                val appLabel = resolveInfo.loadLabel(packageManager).toString()
+                detected.add(
+                    AllowedApp(
+                        packageName = pkgName,
+                        displayName = appLabel,
+                        category = "Zainstalowana na telefonie",
+                        isEnabled = false // Domyślnie zablokowana do zatwierdzenia przez rodzica
+                    )
+                )
+            }
+
+            // Posortuj alfabetycznie
+            detected.sortBy { it.displayName }
+
+            withContext(Dispatchers.Main) {
+                repository.syncDetectedInstalledApps(detected)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     private fun launchChildApp(app: AllowedApp) {
         if (!app.isEnabled) {
             Toast.makeText(this, "Aplikacja jest zablokowana przez rodzica", Toast.LENGTH_SHORT).show()
@@ -191,12 +244,11 @@ class MainActivity : ComponentActivity() {
         if (launchIntent != null) {
             startActivity(launchIntent)
         } else {
-            Toast.makeText(this, "Aplikacja '${app.displayName}' nie jest zainstalowana na tablecie", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Aplikacja '${app.displayName}' nie jest zainstalowana na tym urządzeniu", Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun exitToDefaultAndroidHome() {
-        // Powrót do zwykłego launchera systemowego
         val selectorIntent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_HOME)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK

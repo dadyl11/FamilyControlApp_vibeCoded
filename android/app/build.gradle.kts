@@ -12,8 +12,8 @@ android {
         applicationId = "com.familycontrol.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0-poc"
+        versionCode = 2
+        versionName = "1.0.1-poc"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
