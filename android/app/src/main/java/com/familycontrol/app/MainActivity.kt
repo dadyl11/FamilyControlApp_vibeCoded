@@ -193,6 +193,9 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         timerEngine.startOrResumeSession()
+        lifecycleScope.launch(Dispatchers.Default) {
+            scanAndSyncDeviceApps()
+        }
     }
 
     override fun onPause() {
@@ -202,32 +205,64 @@ class MainActivity : ComponentActivity() {
 
     private suspend fun scanAndSyncDeviceApps() {
         try {
+            val pm = packageManager
+            val detectedMap = mutableMapOf<String, AllowedApp>()
+
+            // 1. Skanowanie aplikacji z filtrem LAUNCHER
             val mainIntent = Intent(Intent.ACTION_MAIN, null).apply {
                 addCategory(Intent.CATEGORY_LAUNCHER)
             }
-            val pkgAppsList = packageManager.queryIntentActivities(mainIntent, 0)
-            val detected = mutableListOf<AllowedApp>()
+            val launcherList = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                pm.queryIntentActivities(mainIntent, PackageManager.MATCH_ALL)
+            } else {
+                pm.queryIntentActivities(mainIntent, 0)
+            }
 
-            for (resolveInfo in pkgAppsList) {
+            for (resolveInfo in launcherList) {
                 val pkgName = resolveInfo.activityInfo.packageName
-                if (pkgName == packageName) continue // Nie pokazuj samego siebie
+                if (pkgName == packageName) continue
 
-                val appLabel = resolveInfo.loadLabel(packageManager).toString()
-                detected.add(
-                    AllowedApp(
-                        packageName = pkgName,
-                        displayName = appLabel,
-                        category = "Zainstalowana na telefonie",
-                        isEnabled = false // Domyślnie zablokowana do zatwierdzenia przez rodzica
-                    )
+                val appLabel = resolveInfo.loadLabel(pm).toString()
+                val isGame = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    resolveInfo.activityInfo.applicationInfo.category == android.content.pm.ApplicationInfo.CATEGORY_GAME
+                } else false
+
+                detectedMap[pkgName] = AllowedApp(
+                    packageName = pkgName,
+                    displayName = appLabel,
+                    category = if (isGame) "Gra" else "Aplikacja",
+                    isEnabled = false
                 )
             }
 
-            // Posortuj alfabetycznie
-            detected.sortBy { it.displayName }
+            // 2. Dodatkowe sprawdzenie wszystkich zainstalowanych pakietów (dla gier, które nie rejestrują się standardowo)
+            val allPackages = pm.getInstalledPackages(0)
+            for (pkgInfo in allPackages) {
+                val pkgName = pkgInfo.packageName
+                if (pkgName == packageName) continue
+                if (!detectedMap.containsKey(pkgName)) {
+                    val launchIntent = pm.getLaunchIntentForPackage(pkgName)
+                    if (launchIntent != null) {
+                        val appLabel = pkgInfo.applicationInfo?.loadLabel(pm)?.toString() ?: pkgName
+                        val isGame = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                            pkgInfo.applicationInfo?.category == android.content.pm.ApplicationInfo.CATEGORY_GAME
+                        } else false
+
+                        detectedMap[pkgName] = AllowedApp(
+                            packageName = pkgName,
+                            displayName = appLabel,
+                            category = if (isGame) "Gra" else "Aplikacja",
+                            isEnabled = false
+                        )
+                    }
+                }
+            }
+
+            val resultList = detectedMap.values.toMutableList()
+            resultList.sortBy { it.displayName }
 
             withContext(Dispatchers.Main) {
-                repository.syncDetectedInstalledApps(detected)
+                repository.syncDetectedInstalledApps(resultList)
             }
         } catch (e: Exception) {
             e.printStackTrace()
