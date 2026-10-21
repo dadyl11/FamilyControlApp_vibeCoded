@@ -1,8 +1,12 @@
 package com.familycontrol.app
 
+import android.app.role.RoleManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -84,6 +88,7 @@ class MainActivity : ComponentActivity() {
             var isLockedOut by remember { mutableStateOf(pinSecurityManager.isCurrentlyLockedOut()) }
             var remainingLockout by remember { mutableStateOf(pinSecurityManager.getRemainingLockoutSeconds()) }
             var parentInitialTab by remember { mutableIntStateOf(0) }
+            var isDefaultHome by remember { mutableStateOf(isDefaultLauncher()) }
 
             // Odświeżanie stanu UI
             LaunchedEffect(Unit) {
@@ -93,6 +98,7 @@ class MainActivity : ComponentActivity() {
                     remainingSec = timerEngine.getRemainingSeconds()
                     isLockedOut = pinSecurityManager.isCurrentlyLockedOut()
                     remainingLockout = pinSecurityManager.getRemainingLockoutSeconds()
+                    isDefaultHome = isDefaultLauncher()
                 }
             }
 
@@ -103,6 +109,7 @@ class MainActivity : ComponentActivity() {
                             remainingSeconds = remainingSec,
                             sessionState = currentEngineState,
                             allowedApps = allowedApps,
+                            isDefaultLauncher = isDefaultHome,
                             onAppClick = { app -> launchChildApp(app) },
                             onRequestParentMode = {
                                 parentInitialTab = 0
@@ -113,6 +120,9 @@ class MainActivity : ComponentActivity() {
                                 parentInitialTab = 1 // Przejdź od razu do zakładki "Aplikacje"
                                 pinErrorMessage = null
                                 showPinDialog = true
+                            },
+                            onRequestSetDefaultLauncher = {
+                                requestSetDefaultLauncher()
                             }
                         )
                     }
@@ -132,6 +142,7 @@ class MainActivity : ComponentActivity() {
                             auditEvents = auditEvents,
                             consumedSecondsToday = timerEngine.getConsumedSecondsToday(),
                             initialTab = parentInitialTab,
+                            isDefaultLauncher = isDefaultHome,
                             onUpdatePolicy = { newPolicy ->
                                 lifecycleScope.launch {
                                     repository.updatePolicy(newPolicy)
@@ -158,6 +169,9 @@ class MainActivity : ComponentActivity() {
                             },
                             onExitToAndroidSystemHome = {
                                 exitToDefaultAndroidHome()
+                            },
+                            onRequestSetDefaultLauncher = {
+                                requestSetDefaultLauncher()
                             }
                         )
                     }
@@ -289,5 +303,42 @@ class MainActivity : ComponentActivity() {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
         startActivity(selectorIntent)
+    }
+
+    private fun isDefaultLauncher(): Boolean {
+        return try {
+            val intent = Intent(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_HOME)
+            }
+            val resolveInfo = packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
+            resolveInfo?.activityInfo?.packageName == packageName
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun requestSetDefaultLauncher() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val roleManager = getSystemService(RoleManager::class.java)
+                if (roleManager != null && roleManager.isRoleAvailable(RoleManager.ROLE_HOME)) {
+                    val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_HOME)
+                    startActivity(intent)
+                    return
+                }
+            }
+            val intent = Intent(Settings.ACTION_HOME_SETTINGS).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            try {
+                startActivity(Intent(Settings.ACTION_SETTINGS).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                })
+            } catch (err: Exception) {
+                Toast.makeText(this, "Przejdź do Ustawienia -> Aplikacje domyślne -> Ekran główny", Toast.LENGTH_LONG).show()
+            }
+        }
     }
 }

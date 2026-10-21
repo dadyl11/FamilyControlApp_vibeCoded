@@ -28,11 +28,13 @@ fun ParentConfigScreen(
     auditEvents: List<AuditEvent>,
     consumedSecondsToday: Long,
     initialTab: Int = 0,
+    isDefaultLauncher: Boolean = true,
     onUpdatePolicy: (ChildPolicy) -> Unit,
     onToggleApp: (String, Boolean) -> Unit,
     onGrantBonusMinutes: (Int) -> Unit,
     onReturnToKidsMode: () -> Unit,
-    onExitToAndroidSystemHome: () -> Unit
+    onExitToAndroidSystemHome: () -> Unit,
+    onRequestSetDefaultLauncher: () -> Unit = {}
 ) {
     var weekdayMinutes by remember(policy) { mutableFloatStateOf(policy.dailyLimitMinutesWeekday.toFloat()) }
     var weekendMinutes by remember(policy) { mutableFloatStateOf(policy.dailyLimitMinutesWeekend.toFloat()) }
@@ -205,6 +207,119 @@ fun ParentConfigScreen(
                                 valueRange = 10f..120f,
                                 steps = 10
                             )
+
+                            Divider(modifier = Modifier.padding(vertical = 16.dp), color = Color(0xFF334155))
+
+                            // Sekcja zabezpieczenia klawisza HOME
+                            Text(
+                                text = "Zabezpieczenie przycisku 'Home' / Menu",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            if (isDefaultLauncher) {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF064E3B))
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.CheckCircle,
+                                                contentDescription = null,
+                                                tint = Color(0xFF34D399),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "Blokada Home aktywna (Domyślny Pulpit)",
+                                                color = Color(0xFF6EE7B7),
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = "Kliknięcie przycisku 'Domek' na urządzeniu zawsze wraca do trybu dziecka.",
+                                            color = Color(0xFFA7F3D0),
+                                            fontSize = 11.sp
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        OutlinedButton(
+                                            onClick = onExitToAndroidSystemHome,
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                        ) {
+                                            Text("Przełącz na zwykły pulpit Androida", fontSize = 11.sp)
+                                        }
+                                    }
+                                }
+                            } else {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF7C2D12))
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.Warning,
+                                                contentDescription = null,
+                                                tint = Color(0xFFF97316),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "Klawisz Home nie jest zablokowany!",
+                                                color = Color.White,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = "Family Control nie jest ustawiony jako domyślny pulpit. Kliknięcie 'Domku' powoduje wyjście do telefonu rodzica.",
+                                            color = Color(0xFFFED7AA),
+                                            fontSize = 11.sp
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Button(
+                                            onClick = onRequestSetDefaultLauncher,
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA580C)),
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                        ) {
+                                            Text("Ustaw jako Domyślny Pulpit (Zablokuj Domek)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Podpowiedź o przypinaniu aplikacji (Kiosk)
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color(0xFF0F172A).copy(alpha = 0.6f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = null,
+                                        tint = Color(0xFF38BDF8),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Wskazówka Kiosk: W Ustawieniach telefonu możesz włączyć 'Przypinanie aplikacji' (App Pinning) i przypiąć Family Control — zablokuje to całkowicie pasek gestów.",
+                                        color = Color(0xFF94A3B8),
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
                         }
                     }
                 }

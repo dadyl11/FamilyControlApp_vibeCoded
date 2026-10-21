@@ -33,9 +33,11 @@ fun KidsHomeScreen(
     remainingSeconds: Long,
     sessionState: SessionState,
     allowedApps: List<AllowedApp>,
+    isDefaultLauncher: Boolean = true,
     onAppClick: (AllowedApp) -> Unit,
     onRequestParentMode: () -> Unit,
-    onRequestAddApp: () -> Unit
+    onRequestAddApp: () -> Unit,
+    onRequestSetDefaultLauncher: () -> Unit = {}
 ) {
     val minutes = remainingSeconds / 60
     val seconds = remainingSeconds % 60
@@ -169,7 +171,53 @@ fun KidsHomeScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        if (!isDefaultLauncher) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onRequestSetDefaultLauncher() },
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF7C2D12))
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = "Ostrzeżenie",
+                        tint = Color(0xFFF97316),
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Przycisk 'Home' nie jest zablokowany!",
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Ustaw Family Control jako domyślny pulpit, aby kliknięcie 'Domku' zawsze wracało tutaj.",
+                            color = Color(0xFFFED7AA),
+                            fontSize = 11.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = onRequestSetDefaultLauncher,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA580C)),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text("Zablokuj", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Nagłówek sekcji
         Row(
