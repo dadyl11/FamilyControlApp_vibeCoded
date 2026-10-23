@@ -72,9 +72,9 @@ class SessionMonitorService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             timerJob?.cancel()
-            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopForeground(Service.STOP_FOREGROUND_REMOVE)
             stopSelf()
-            return START_NOT_STICKY
+            return Service.START_NOT_STICKY
         }
 
         // Natychmiastowe pokazanie notyfikacji pierwszoplanowej
@@ -82,7 +82,7 @@ class SessionMonitorService : Service() {
         startForeground(NOTIFICATION_ID, initialNotification)
 
         startBackgroundTimerLoop()
-        return START_STICKY
+        return Service.START_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

@@ -257,12 +257,13 @@ class MainActivity : ComponentActivity() {
             }
 
             for (resolveInfo in launcherList) {
-                val pkgName = resolveInfo.activityInfo.packageName
+                val actInfo = resolveInfo.activityInfo ?: continue
+                val pkgName = actInfo.packageName ?: continue
                 if (pkgName == packageName) continue
 
                 val appLabel = resolveInfo.loadLabel(pm).toString()
                 val isGame = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    resolveInfo.activityInfo.applicationInfo?.category == android.content.pm.ApplicationInfo.CATEGORY_GAME
+                    actInfo.applicationInfo?.category == android.content.pm.ApplicationInfo.CATEGORY_GAME
                 } else false
 
                 detectedMap[pkgName] = AllowedApp(
@@ -276,7 +277,7 @@ class MainActivity : ComponentActivity() {
             // 2. Dodatkowe sprawdzenie wszystkich zainstalowanych pakietów (dla gier, które nie rejestrują się standardowo)
             val allPackages = pm.getInstalledPackages(0)
             for (pkgInfo in allPackages) {
-                val pkgName = pkgInfo.packageName
+                val pkgName = pkgInfo.packageName ?: continue
                 if (pkgName == packageName) continue
                 if (!detectedMap.containsKey(pkgName)) {
                     val launchIntent = pm.getLaunchIntentForPackage(pkgName)
