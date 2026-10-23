@@ -29,12 +29,14 @@ fun ParentConfigScreen(
     consumedSecondsToday: Long,
     initialTab: Int = 0,
     isDefaultLauncher: Boolean = true,
+    isOverlayGranted: Boolean = true,
     onUpdatePolicy: (ChildPolicy) -> Unit,
     onToggleApp: (String, Boolean) -> Unit,
     onGrantBonusMinutes: (Int) -> Unit,
     onReturnToKidsMode: () -> Unit,
     onExitToAndroidSystemHome: () -> Unit,
-    onRequestSetDefaultLauncher: () -> Unit = {}
+    onRequestSetDefaultLauncher: () -> Unit = {},
+    onRequestOverlayPermission: () -> Unit = {}
 ) {
     var weekdayMinutes by remember(policy) { mutableFloatStateOf(policy.dailyLimitMinutesWeekday.toFloat()) }
     var weekendMinutes by remember(policy) { mutableFloatStateOf(policy.dailyLimitMinutesWeekend.toFloat()) }
@@ -292,6 +294,80 @@ fun ParentConfigScreen(
                                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                                         ) {
                                             Text("Ustaw jako Domyślny Pulpit (Zablokuj Domek)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Sekcja uprawnienia wyświetlania nad innymi aplikacjami (Blokada gier)
+                            if (isOverlayGranted) {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF064E3B))
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.CheckCircle,
+                                                contentDescription = null,
+                                                tint = Color(0xFF34D399),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "Blokada nad grami aktywna",
+                                                color = Color(0xFF6EE7B7),
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = "Aplikacja ma uprawnienie do natychmiastowego wyświetlenia ekranu blokady na wierzchu dowolnej gry.",
+                                            color = Color(0xFFA7F3D0),
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                            } else {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF451A03))
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.Security,
+                                                contentDescription = null,
+                                                tint = Color(0xFFFBBF24),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "Wyświetlanie nad innymi aplikacjami",
+                                                color = Color.White,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = "Włącz to uprawnienie, aby komunikat 'Koniec czasu' natychmiast przykrywał uruchomioną grę.",
+                                            color = Color(0xFFFDE68A),
+                                            fontSize = 11.sp
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Button(
+                                            onClick = onRequestOverlayPermission,
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD97706)),
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                        ) {
+                                            Text("Włącz wyświetlanie nad grami", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                         }
                                     }
                                 }

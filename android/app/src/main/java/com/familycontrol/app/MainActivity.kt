@@ -4,9 +4,11 @@ import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -17,9 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
-import com.familycontrol.app.data.InMemoryLocalRepository
-import com.familycontrol.app.domain.PinSecurityManager
-import com.familycontrol.app.domain.SessionTimerEngine
+import com.familycontrol.app.domain.SessionManager
 import com.familycontrol.app.model.AllowedApp
 import com.familycontrol.app.model.SessionState
 import com.familycontrol.app.service.SessionMonitorService
@@ -34,10 +34,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
-
-    private val repository = InMemoryLocalRepository()
-    private val pinSecurityManager = PinSecurityManager()
-    private lateinit var timerEngine: SessionTimerEngine
 
     private val homeRoleLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -54,20 +50,25 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        timerEngine = SessionTimerEngine(
-            policy = repository.policyFlow.value,
-            onCheckpointSave = { checkpoint ->
-                lifecycleScope.launch {
-                    repository.saveCheckpoint(checkpoint)
-                }
-            }
-        )
+        // Inicjalizacja globalnego menedżera sesji
+        SessionManager.init(applicationContext)
 
-        // Przechwycenie przycisku Wstecz (Back), aby uniemożliwić zamknięcie launchera przez dziecko
+        // Uruchomienie ciągłego serwisu w tle, który liczy czas podczas grania w gry
+        SessionMonitorService.start(this)
+
+        // Przechwycenie przycisku Wstecz (Back), aby uniemożliwić zamknięcie launchera i ekranu blokady
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (timerEngine.getCurrentState() == SessionState.PARENT_MODE) {
-                    timerEngine.exitParentModeToKids()
+                when (SessionManager.currentState.value) {
+                    SessionState.PARENT_MODE -> {
+                        SessionManager.exitParentModeToKids()
+                    }
+                    SessionState.TIME_EXPIRED -> {
+                        // Klawisz Wstecz zablokowany! Nie pozwala ominąć ekranu końca czasu
+                    }
+                    else -> {
+                        // W trybie dziecka przycisk Wstecz nie pozwala opuścić aplikacji
+                    }
                 }
             }
         })
@@ -77,41 +78,29 @@ class MainActivity : ComponentActivity() {
             scanAndSyncDeviceApps()
         }
 
-        // Główna pętla zegarowa
-        lifecycleScope.launch {
-            while (isActive) {
-                delay(1000L)
-                val state = timerEngine.tick()
-                val remaining = timerEngine.getRemainingSeconds()
-                if (state != SessionState.PARENT_MODE) {
-                    SessionMonitorService.start(this@MainActivity, remaining)
-                }
-            }
-        }
-
         setContent {
-            val policy by repository.policyFlow.collectAsState()
-            val allowedApps by repository.allowedAppsFlow.collectAsState()
-            val auditEvents by repository.auditEventsFlow.collectAsState()
+            val policy by SessionManager.repository.policyFlow.collectAsState()
+            val allowedApps by SessionManager.repository.allowedAppsFlow.collectAsState()
+            val auditEvents by SessionManager.repository.auditEventsFlow.collectAsState()
+            val currentEngineState by SessionManager.currentState.collectAsState()
+            val remainingSec by SessionManager.remainingSeconds.collectAsState()
 
             var showPinDialog by remember { mutableStateOf(false) }
             var pinErrorMessage by remember { mutableStateOf<String?>(null) }
-            var currentEngineState by remember { mutableStateOf(timerEngine.getCurrentState()) }
-            var remainingSec by remember { mutableStateOf(timerEngine.getRemainingSeconds()) }
-            var isLockedOut by remember { mutableStateOf(pinSecurityManager.isCurrentlyLockedOut()) }
-            var remainingLockout by remember { mutableStateOf(pinSecurityManager.getRemainingLockoutSeconds()) }
+            var isLockedOut by remember { mutableStateOf(SessionManager.pinSecurityManager.isCurrentlyLockedOut()) }
+            var remainingLockout by remember { mutableStateOf(SessionManager.pinSecurityManager.getRemainingLockoutSeconds()) }
             var parentInitialTab by remember { mutableIntStateOf(0) }
             var isDefaultHome by remember { mutableStateOf(isDefaultLauncher()) }
+            var isOverlayGranted by remember { mutableStateOf(canDrawOverlays()) }
 
-            // Odświeżanie stanu UI
+            // Okresowe odświeżanie stanu systemowych uprawnień
             LaunchedEffect(Unit) {
                 while (isActive) {
-                    delay(500L)
-                    currentEngineState = timerEngine.getCurrentState()
-                    remainingSec = timerEngine.getRemainingSeconds()
-                    isLockedOut = pinSecurityManager.isCurrentlyLockedOut()
-                    remainingLockout = pinSecurityManager.getRemainingLockoutSeconds()
+                    delay(1000L)
+                    isLockedOut = SessionManager.pinSecurityManager.isCurrentlyLockedOut()
+                    remainingLockout = SessionManager.pinSecurityManager.getRemainingLockoutSeconds()
                     isDefaultHome = isDefaultLauncher()
+                    isOverlayGranted = canDrawOverlays()
                 }
             }
 
@@ -153,38 +142,41 @@ class MainActivity : ComponentActivity() {
                             policy = policy,
                             allowedApps = allowedApps,
                             auditEvents = auditEvents,
-                            consumedSecondsToday = timerEngine.getConsumedSecondsToday(),
+                            consumedSecondsToday = SessionManager.timerEngine.getConsumedSecondsToday(),
                             initialTab = parentInitialTab,
                             isDefaultLauncher = isDefaultHome,
+                            isOverlayGranted = isOverlayGranted,
                             onUpdatePolicy = { newPolicy ->
                                 lifecycleScope.launch {
-                                    repository.updatePolicy(newPolicy)
-                                    timerEngine.updatePolicy(newPolicy)
+                                    SessionManager.repository.updatePolicy(newPolicy)
                                 }
                             },
                             onToggleApp = { pkg, isAllowed ->
                                 lifecycleScope.launch {
-                                    repository.setAppAllowed(pkg, isAllowed)
-                                    repository.logAuditEvent(
+                                    SessionManager.repository.setAppAllowed(pkg, isAllowed)
+                                    SessionManager.repository.logAuditEvent(
                                         "APP_TOGGLE",
                                         "Zmieniono uprawnienie dla $pkg: $isAllowed"
                                     )
                                 }
                             },
                             onGrantBonusMinutes = { mins ->
-                                timerEngine.grantBonusMinutes(mins)
+                                SessionManager.grantBonusMinutes(mins)
                                 lifecycleScope.launch {
-                                    repository.logAuditEvent("BONUS_TIME", "Rodzic przyznał +$mins minut.")
+                                    SessionManager.repository.logAuditEvent("BONUS_TIME", "Rodzic przyznał +$mins minut.")
                                 }
                             },
                             onReturnToKidsMode = {
-                                timerEngine.exitParentModeToKids()
+                                SessionManager.exitParentModeToKids()
                             },
                             onExitToAndroidSystemHome = {
                                 exitToDefaultAndroidHome()
                             },
                             onRequestSetDefaultLauncher = {
                                 requestSetDefaultLauncher()
+                            },
+                            onRequestOverlayPermission = {
+                                requestOverlayPermission()
                             }
                         )
                     }
@@ -196,17 +188,17 @@ class MainActivity : ComponentActivity() {
                         remainingLockoutSeconds = remainingLockout,
                         errorMessage = pinErrorMessage,
                         onPinSubmit = { pin ->
-                            val result = pinSecurityManager.verifyPin(pin)
+                            val result = SessionManager.pinSecurityManager.verifyPin(pin)
                             if (result.isSuccess) {
                                 showPinDialog = false
-                                timerEngine.unlockParentMode()
+                                SessionManager.unlockParentMode()
                                 lifecycleScope.launch {
-                                    repository.logAuditEvent("PIN_SUCCESS", "Autoryzacja rodzica udana.")
+                                    SessionManager.repository.logAuditEvent("PIN_SUCCESS", "Autoryzacja rodzica udana.")
                                 }
                             } else {
                                 pinErrorMessage = result.message
                                 lifecycleScope.launch {
-                                    repository.logAuditEvent("PIN_FAILED", "Błędna próba PIN (${result.failedAttempts}/5).")
+                                    SessionManager.repository.logAuditEvent("PIN_FAILED", "Błędna próba PIN (${result.failedAttempts}/5).")
                                 }
                             }
                         },
@@ -219,7 +211,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        timerEngine.startOrResumeSession()
+        SessionManager.isActivityResumed = true
+
+        // Jeśli czas wygasł, wymuś podtrzymanie ekranu w celu zaprezentowania blokady
+        if (SessionManager.currentState.value == SessionState.TIME_EXPIRED) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+
         lifecycleScope.launch(Dispatchers.Default) {
             scanAndSyncDeviceApps()
         }
@@ -227,7 +227,18 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
-        timerEngine.pauseSession()
+        SessionManager.isActivityResumed = false
+        // WAŻNE: NIE wstrzymujemy sesji (pauseSession)!
+        // Gdy dziecko przełącza się na wybraną grę, licznik w tle musi nadal odliczać czas!
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent?.getBooleanExtra("EXTRA_FORCE_TIME_EXPIRED", false) == true) {
+            // Wymuszenie wyświetlenia ekranu blokady
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
     }
 
     private suspend fun scanAndSyncDeviceApps() {
@@ -239,7 +250,7 @@ class MainActivity : ComponentActivity() {
             val mainIntent = Intent(Intent.ACTION_MAIN, null).apply {
                 addCategory(Intent.CATEGORY_LAUNCHER)
             }
-            val launcherList = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            val launcherList = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 pm.queryIntentActivities(mainIntent, PackageManager.MATCH_ALL)
             } else {
                 pm.queryIntentActivities(mainIntent, 0)
@@ -250,7 +261,7 @@ class MainActivity : ComponentActivity() {
                 if (pkgName == packageName) continue
 
                 val appLabel = resolveInfo.loadLabel(pm).toString()
-                val isGame = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                val isGame = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     resolveInfo.activityInfo.applicationInfo.category == android.content.pm.ApplicationInfo.CATEGORY_GAME
                 } else false
 
@@ -271,7 +282,7 @@ class MainActivity : ComponentActivity() {
                     val launchIntent = pm.getLaunchIntentForPackage(pkgName)
                     if (launchIntent != null) {
                         val appLabel = pkgInfo.applicationInfo?.loadLabel(pm)?.toString() ?: pkgName
-                        val isGame = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        val isGame = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                             pkgInfo.applicationInfo?.category == android.content.pm.ApplicationInfo.CATEGORY_GAME
                         } else false
 
@@ -289,7 +300,7 @@ class MainActivity : ComponentActivity() {
             resultList.sortBy { it.displayName }
 
             withContext(Dispatchers.Main) {
-                repository.syncDetectedInstalledApps(resultList)
+                SessionManager.repository.syncDetectedInstalledApps(resultList)
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -297,6 +308,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun launchChildApp(app: AllowedApp) {
+        if (SessionManager.currentState.value == SessionState.TIME_EXPIRED) {
+            Toast.makeText(this, "Limit czasu na dziś został wyczerpany!", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         if (!app.isEnabled) {
             Toast.makeText(this, "Aplikacja jest zablokowana przez rodzica", Toast.LENGTH_SHORT).show()
             return
@@ -312,7 +328,6 @@ class MainActivity : ComponentActivity() {
 
     private fun exitToDefaultAndroidHome() {
         try {
-            // Znajdź natywny launcher telefonu rodzica (np. ColorOS / Realme UI, Samsung One UI, Pixel Launcher)
             val homeIntent = Intent(Intent.ACTION_MAIN).apply {
                 addCategory(Intent.CATEGORY_HOME)
             }
@@ -356,6 +371,35 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun canDrawOverlays(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Settings.canDrawOverlays(this)
+        } else {
+            true
+        }
+    }
+
+    private fun requestOverlayPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName")
+                ).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                startActivity(intent)
+                Toast.makeText(
+                    this,
+                    "Zezwól Family Control na wyświetlanie nad innymi aplikacjami, aby blokować gry w locie.",
+                    Toast.LENGTH_LONG
+                ).show()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     private fun requestSetDefaultLauncher() {
         openHomeSettingsDirectly()
     }
@@ -364,7 +408,6 @@ class MainActivity : ComponentActivity() {
         var launched = false
 
         // Krok 1: Bezpośrednie otwarcie systemowego ekranu wyboru launchera (ACTION_HOME_SETTINGS)
-        // Działa niezawodnie na Realme UI / ColorOS, MIUI/HyperOS, Samsung One UI i Android 10+
         try {
             val intent = Intent(Settings.ACTION_HOME_SETTINGS).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
@@ -414,7 +457,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Zawsze wyświetlamy czytelny komunikat dla użytkownika z instrukcją
         Toast.makeText(
             this,
             "Wybierz 'Family Control' jako domyślną aplikację ekranu głównego",

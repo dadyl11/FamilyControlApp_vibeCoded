@@ -32,6 +32,21 @@
     <!-- Powiadomienia o kończącym się czasie na Androidzie 13+ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Pełnoekranowe powiadomienie blokady po upływie czasu na grę -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
+    <!-- Wyświetlanie ekranu blokady nad innymi grami i aplikacjami -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- Przywracanie ekranu blokady na pierwszy plan urządzenia -->
+    <uses-permission android:name="android.permission.REORDER_TASKS" />
+
+    <!-- Wibracja przy wyczerpaniu limitu -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- Podtrzymanie wybudzenia przy wyświetleniu komunikatu blokady -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
     <!-- Monitor czasu i odliczanie sesji offline -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
@@ -53,6 +68,8 @@
             android:launchMode="singleTask"
             android:clearTaskOnLaunch="true"
             android:stateNotNeeded="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
             android:windowSoftInputMode="adjustPan">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

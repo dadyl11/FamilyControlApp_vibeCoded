@@ -66,7 +66,12 @@ class SessionTimerEngine(
      * Uruchomienie lub wznowienie sesji dziecka (np. onResume launchera).
      */
     fun startOrResumeSession() {
-        if (state == SessionState.TIME_EXPIRED) return
+        val remaining = getRemainingSeconds()
+        if (remaining <= 0L) {
+            state = SessionState.TIME_EXPIRED
+            isSessionActive = false
+            return
+        }
 
         val nowMonotonic = monotonicClock()
         lastMonotonicMark = nowMonotonic
@@ -175,6 +180,8 @@ class SessionTimerEngine(
         val bonusSeconds = minutes * 60L
         consumedSecondsToday = (consumedSecondsToday - bonusSeconds).coerceAtLeast(0L)
         sessionElapsedSeconds = (sessionElapsedSeconds - bonusSeconds).coerceAtLeast(0L)
+        lastMonotonicMark = monotonicClock()
+        isSessionActive = true
         evaluateState()
         triggerCheckpoint()
     }
@@ -190,8 +197,14 @@ class SessionTimerEngine(
                 triggerCheckpoint()
                 SessionState.TIME_EXPIRED
             }
-            remaining <= warningSec -> SessionState.WARNING
-            else -> SessionState.ACTIVE
+            remaining <= warningSec -> {
+                isSessionActive = true
+                SessionState.WARNING
+            }
+            else -> {
+                isSessionActive = true
+                SessionState.ACTIVE
+            }
         }
     }
 
