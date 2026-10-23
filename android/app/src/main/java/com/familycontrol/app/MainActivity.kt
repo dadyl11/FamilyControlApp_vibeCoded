@@ -142,7 +142,7 @@ class MainActivity : ComponentActivity() {
                             policy = policy,
                             allowedApps = allowedApps,
                             auditEvents = auditEvents,
-                            consumedSecondsToday = SessionManager.timerEngine.getConsumedSecondsToday(),
+                            consumedSecondsToday = SessionManager.getConsumedSecondsToday(),
                             initialTab = parentInitialTab,
                             isDefaultLauncher = isDefaultHome,
                             isOverlayGranted = isOverlayGranted,

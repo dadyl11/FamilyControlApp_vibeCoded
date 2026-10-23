@@ -94,4 +94,9 @@ object SessionManager {
         _currentState.value = timerEngine.getCurrentState()
         _remainingSeconds.value = timerEngine.getRemainingSeconds()
     }
+
+    fun getConsumedSecondsToday(): Long {
+        if (!isInitialized) return 0L
+        return timerEngine.getConsumedSecondsToday()
+    }
 }

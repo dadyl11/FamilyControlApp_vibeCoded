@@ -21,10 +21,23 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle 8.7
-        uses: gradle/actions/setup-gradle@v3
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
+          build-root-directory: android
+
+      - name: Enforce Gradle 8.7
+        run: |
+          # Ensure Gradle 8.7 is used (AGP 8.3 requires Gradle 8.4-8.7 and fails on Gradle 9.x)
+          if ! command -v gradle &> /dev/null || ! gradle --version 2>&1 | grep -q "Gradle 8.7"; then
+            echo "Gradle in PATH is not 8.7. Installing official Gradle 8.7..."
+            curl -sSL -o /tmp/gradle-8.7-bin.zip https://services.gradle.org/distributions/gradle-8.7-bin.zip
+            unzip -q -o /tmp/gradle-8.7-bin.zip -d /tmp
+            echo "/tmp/gradle-8.7/bin" >> $GITHUB_PATH
+            export PATH="/tmp/gradle-8.7/bin:$PATH"
+          fi
+          gradle --version
 
       - name: Ensure Debug Keystore
         run: |
@@ -43,3 +56,4 @@ jobs:
         with:
           name: family-control-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
