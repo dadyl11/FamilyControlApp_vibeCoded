@@ -232,10 +232,10 @@ class MainActivity : ComponentActivity() {
         // Gdy dziecko przełącza się na wybraną grę, licznik w tle musi nadal odliczać czas!
     }
 
-    override fun onNewIntent(intent: Intent?) {
+    override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (intent?.getBooleanExtra("EXTRA_FORCE_TIME_EXPIRED", false) == true) {
+        if (intent.getBooleanExtra("EXTRA_FORCE_TIME_EXPIRED", false)) {
             // Wymuszenie wyświetlenia ekranu blokady
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
