@@ -262,7 +262,7 @@ class MainActivity : ComponentActivity() {
 
                 val appLabel = resolveInfo.loadLabel(pm).toString()
                 val isGame = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    resolveInfo.activityInfo.applicationInfo.category == android.content.pm.ApplicationInfo.CATEGORY_GAME
+                    resolveInfo.activityInfo.applicationInfo?.category == android.content.pm.ApplicationInfo.CATEGORY_GAME
                 } else false
 
                 detectedMap[pkgName] = AllowedApp(
@@ -333,14 +333,15 @@ class MainActivity : ComponentActivity() {
             }
             val homeActivities = packageManager.queryIntentActivities(homeIntent, 0)
             val otherLauncher = homeActivities.firstOrNull { 
-                it.activityInfo.packageName != packageName && 
-                !it.activityInfo.packageName.contains("resolver", ignoreCase = true)
+                val pkg = it.activityInfo?.packageName ?: ""
+                pkg.isNotEmpty() && pkg != packageName && !pkg.contains("resolver", ignoreCase = true)
             }
 
-            if (otherLauncher != null) {
+            if (otherLauncher?.activityInfo != null) {
+                val actInfo = otherLauncher.activityInfo
                 val targetIntent = Intent(Intent.ACTION_MAIN).apply {
                     addCategory(Intent.CATEGORY_HOME)
-                    setClassName(otherLauncher.activityInfo.packageName, otherLauncher.activityInfo.name)
+                    setClassName(actInfo.packageName, actInfo.name)
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 }
                 startActivity(targetIntent)

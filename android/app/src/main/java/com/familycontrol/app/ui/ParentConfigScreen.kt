@@ -171,7 +171,7 @@ fun ParentConfigScreen(
                                 ) { Text("+1h", fontSize = 12.sp) }
                             }
 
-                            Divider(modifier = Modifier.padding(vertical = 16.dp), color = Color(0xFF334155))
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp), color = Color(0xFF334155))
 
                             Text("Limit dzienny pon-pt: ${weekdayMinutes.toInt()} min", color = Color.White, fontSize = 13.sp)
                             Slider(
@@ -210,7 +210,7 @@ fun ParentConfigScreen(
                                 steps = 10
                             )
 
-                            Divider(modifier = Modifier.padding(vertical = 16.dp), color = Color(0xFF334155))
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp), color = Color(0xFF334155))
 
                             // Sekcja zabezpieczenia klawisza HOME
                             Text(
@@ -472,7 +472,7 @@ fun ParentConfigScreen(
                                         modifier = Modifier.padding(start = 8.dp)
                                     )
                                 }
-                                Divider(color = Color(0xFF334155))
+                                HorizontalDivider(color = Color(0xFF334155))
                             }
                         }
                     }
@@ -509,7 +509,7 @@ fun ParentConfigScreen(
                                             color = if (event.eventType.contains("ALERT") || event.eventType.contains("FAILED")) Color(0xFFF43F5E) else Color(0xFFE2E8F0),
                                             fontSize = 12.sp
                                         )
-                                        Divider(color = Color(0xFF334155), modifier = Modifier.padding(top = 6.dp))
+                                        HorizontalDivider(color = Color(0xFF334155), modifier = Modifier.padding(top = 6.dp))
                                     }
                                 }
                             }
