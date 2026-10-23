@@ -205,11 +205,26 @@ export default function App() {
   const [apps, setApps] = useState<AllowedApp[]>(INITIAL_TABLET_APPS);
   const [activeApp, setActiveApp] = useState<AllowedApp | null>(null);
 
-  // --- OBSŁUGA INNYCH APLIKACJI I PROŚBY DZIECKA ---
   const [showRequestAppModal, setShowRequestAppModal] = useState<boolean>(false);
+  const [showThreeMinWarningModal, setShowThreeMinWarningModal] = useState<boolean>(false);
+  const hasSpokenWarningRef = useRef<boolean>(false);
   const [blockedAppAttempt, setBlockedAppAttempt] = useState<AllowedApp | null>(null);
   const [pendingUnlockApp, setPendingUnlockApp] = useState<AllowedApp | null>(null);
   const [appSearchQuery, setAppSearchQuery] = useState<string>('');
+
+  const speakWarningVoice = (text: string) => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'pl-PL';
+        utterance.rate = 0.95;
+        window.speechSynthesis.speak(utterance);
+      } catch (e) {
+        console.error('Speech error', e);
+      }
+    }
+  };
 
   // --- ZABEZPIECZENIE PIN (PinSecurityManager) ---
   const [parentPin, setParentPin] = useState<string>('1234');
@@ -297,11 +312,24 @@ export default function App() {
     if (sessionState === 'PARENT_MODE') return;
 
     const warnThreshold = policy.warningThresholdMinutes * 60;
+
+    // Automatyczne wyzwolenie komunikatu głosowego oraz popupu przy 3 minutach do końca (180s)
+    if (remainingSeconds <= 180 && remainingSeconds > 0 && !hasSpokenWarningRef.current) {
+      hasSpokenWarningRef.current = true;
+      setShowThreeMinWarningModal(true);
+      speakWarningVoice("Uwaga! Za trzy minuty koniec gry. Dokończ poziom i zapisz stan gry.");
+      addLog('VOICE_WARNING_3MIN', 'Wyemitowano komunikat głosowy TTS oraz popup: Za 3 minuty koniec gry!', 'warning');
+    } else if (remainingSeconds > 180) {
+      hasSpokenWarningRef.current = false;
+    }
+
     if (remainingSeconds <= 0) {
       if (sessionState !== 'TIME_EXPIRED') {
         setSessionState('TIME_EXPIRED');
         setActiveApp(null);
         setBlockedAppAttempt(null);
+        setShowThreeMinWarningModal(false);
+        speakWarningVoice("Koniec czasu na gry! Ekran został zablokowany.");
         addLog('TIME_EXPIRED', 'Limit czasu wyczerpany! Zablokowano dostęp, powrót do blokady.', 'alert');
       }
     } else if (remainingSeconds <= warnThreshold) {
@@ -412,6 +440,20 @@ export default function App() {
       'APP_BLOCKED_UNAUTHORIZED',
       `Próba uruchomienia ${app.displayName} (${app.packageName})! UsageStatsManager wykrył brak autoryzacji — wyświetlono blokadę rodzicielską.`,
       'alert'
+    );
+  };
+
+  const simulateThreeMinWarning = () => {
+    // Ustaw czas tak, aby pozostało dokładnie 180 sekund (3 minuty)
+    const targetConsumed = todayLimitSeconds - 180;
+    setConsumedSecondsToday(Math.max(0, targetConsumed));
+    setShowThreeMinWarningModal(true);
+    hasSpokenWarningRef.current = true;
+    speakWarningVoice("Uwaga! Za trzy minuty koniec gry. Dokończ poziom i zapisz stan.");
+    addLog(
+      'TEST_3MIN_WARNING',
+      'Test ostrzeżenia 3 min: wyemitowano komunikat głosowy TTS w języku polskim oraz wyskakujący modal informacyjny.',
+      'warning'
     );
   };
 
@@ -1183,6 +1225,23 @@ export default function App() {
                     </span>
                   </button>
 
+                  {/* NOWOŚĆ: Test ostrzeżenia 3 min (Głos + Popup) */}
+                  <button
+                    onClick={simulateThreeMinWarning}
+                    className="w-full text-left p-2 rounded-lg bg-amber-950/20 hover:bg-amber-950/40 border border-amber-600/40 text-xs flex items-center justify-between group transition-colors"
+                  >
+                    <div>
+                      <div className="font-semibold text-amber-200 group-hover:text-white flex items-center gap-1.5">
+                        <Volume2 className="w-3.5 h-3.5 text-amber-400" />
+                        Ostrzeżenie 3 min przed końcem
+                      </div>
+                      <div className="text-[10px] text-slate-400">Komunikat głosowy PL + popup na ekranie</div>
+                    </div>
+                    <span className="text-[10px] font-mono text-amber-400 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-800/40">
+                      Głos + Popup
+                    </span>
+                  </button>
+
                   <button
                     onClick={simulateClockRollback}
                     className="w-full text-left p-2 rounded-lg bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 text-xs flex items-center justify-between group transition-colors"
@@ -1638,6 +1697,40 @@ export default function App() {
             >
               Anuluj i wróć
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: OSTRZEŻENIE 3 MINUTY PRZED KOŃCEM CZASU (GŁOS + POPUP) */}
+      {showThreeMinWarningModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
+          <div className="bg-slate-900 border-2 border-amber-500 rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl shadow-amber-950/60 relative">
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center mx-auto mb-3 animate-pulse">
+              <Volume2 className="w-8 h-8" />
+            </div>
+            <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 tracking-wider">
+              KOMUNIKAT GŁOSOWY & POPUP
+            </span>
+            <h3 className="text-xl font-bold text-white mt-3 mb-2">Za 3 minuty koniec gry!</h3>
+            <p className="text-slate-300 text-sm mb-5 leading-relaxed">
+              Zbliża się koniec Twojego limitu na dziś. Dokończ zadanie i zapisz stan gry, zanim ekran zostanie zablokowany.
+            </p>
+            <div className="flex flex-col gap-2.5">
+              <button
+                onClick={() => {
+                  speakWarningVoice("Uwaga! Za trzy minuty koniec gry. Dokończ poziom i zapisz stan.");
+                }}
+                className="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-amber-300 font-medium rounded-xl text-xs flex items-center justify-center gap-2 border border-slate-700 transition-colors"
+              >
+                <Volume2 className="w-4 h-4 text-amber-400" /> Odtwórz ponownie komunikat głosowy
+              </button>
+              <button
+                onClick={() => setShowThreeMinWarningModal(false)}
+                className="w-full py-3 px-4 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-sm transition-colors shadow-lg shadow-amber-500/25"
+              >
+                Rozumiem, dokończę grę
+              </button>
+            </div>
           </div>
         </div>
       )}

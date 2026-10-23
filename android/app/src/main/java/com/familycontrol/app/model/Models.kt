@@ -31,7 +31,7 @@ data class ChildPolicy(
     val dailyLimitMinutesWeekday: Int = 60,
     val dailyLimitMinutesWeekend: Int = 120,
     val sessionLimitMinutes: Int = 30,
-    val warningThresholdMinutes: Int = 5,
+    val warningThresholdMinutes: Int = 3,
     val allowedPackages: Set<String> = setOf(
         "com.google.android.apps.youtube.kids",
         "org.scratchjr.android",
