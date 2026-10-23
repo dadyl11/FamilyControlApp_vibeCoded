@@ -59,7 +59,21 @@ jobs:
             GRADLE_EXEC="/tmp/gradle-8.7/bin/gradle"
           fi
           echo "Building with: $($GRADLE_EXEC --version | head -n 3)"
-          $GRADLE_EXEC assembleDebug --stacktrace --no-daemon
+          set +e
+          $GRADLE_EXEC assembleDebug --stacktrace --no-daemon > /tmp/build.log 2>&1
+          BUILD_STATUS=$?
+          
+          if [ $BUILD_STATUS -ne 0 ]; then
+            echo "==================== BUILD ERROR SUMMARY ===================="
+            grep -E -C 3 "(e: |error:|FAILED|FAILURE:|Caused by:)" /tmp/build.log | head -n 40 || true
+            echo "============================================================="
+            echo "==================== FULL LOG TAIL =========================="
+            tail -n 80 /tmp/build.log
+            exit $BUILD_STATUS
+          else
+            echo "Build completed successfully."
+            tail -n 30 /tmp/build.log
+          fi
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
