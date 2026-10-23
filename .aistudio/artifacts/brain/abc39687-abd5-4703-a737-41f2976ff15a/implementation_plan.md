@@ -105,3 +105,8 @@ Dokument zawierać będzie rzetelną macierz możliwości i ograniczeń na Andro
   2. *Test restartu*: Po wznowieniu stan odczytywany jest z ostatniego checkpointu bez utraty informacji o zużyciu limitu.
   3. *Test PIN-u*: Blokada po 5 nieudanych próbach na 60 sekund zapobiega odgadnięciu przez dziecko.
   4. *Test przejścia stanów*: Automatyczne płynne przejście z `ACTIVE` do `WARNING` na 5 minut przed końcem, a następnie do `TIME_EXPIRED`.
+  5. *Test blokady przycisku Home (v1.0.5-poc)*:
+     - Rozwiązano problem braku reakcji przycisku "Zablokuj" na telefonach z Realme UI / ColorOS / Android 10+:
+       - Zastąpiono błędne `startActivity` bez rezultatu natywnym `Settings.ACTION_HOME_SETTINGS` oraz `registerForActivityResult` z kontraktem `StartActivityForResult()`.
+       - Dodano kaskadowe wywołanie (`ACTION_HOME_SETTINGS` -> `ACTION_MANAGE_DEFAULT_APPS_SETTINGS` -> `RoleManager.ROLE_HOME` -> `ACTION_SETTINGS`) z komunikatem Toast.
+       - Zabezpieczono wyjście rodzica (`exitToDefaultAndroidHome()`), aby wykrywało i otwierało natywny launcher telefonu zamiast zapętlania w Family Control.

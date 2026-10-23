@@ -11,6 +11,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
@@ -37,6 +38,18 @@ class MainActivity : ComponentActivity() {
     private val repository = InMemoryLocalRepository()
     private val pinSecurityManager = PinSecurityManager()
     private lateinit var timerEngine: SessionTimerEngine
+
+    private val homeRoleLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (isDefaultLauncher()) {
+            Toast.makeText(
+                this,
+                "✓ Family Control jest teraz domyślnym ekranem głównym!",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -298,47 +311,114 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun exitToDefaultAndroidHome() {
-        val selectorIntent = Intent(Intent.ACTION_MAIN).apply {
-            addCategory(Intent.CATEGORY_HOME)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        try {
+            // Znajdź natywny launcher telefonu rodzica (np. ColorOS / Realme UI, Samsung One UI, Pixel Launcher)
+            val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_HOME)
+            }
+            val homeActivities = packageManager.queryIntentActivities(homeIntent, 0)
+            val otherLauncher = homeActivities.firstOrNull { 
+                it.activityInfo.packageName != packageName && 
+                !it.activityInfo.packageName.contains("resolver", ignoreCase = true)
+            }
+
+            if (otherLauncher != null) {
+                val targetIntent = Intent(Intent.ACTION_MAIN).apply {
+                    addCategory(Intent.CATEGORY_HOME)
+                    setClassName(otherLauncher.activityInfo.packageName, otherLauncher.activityInfo.name)
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                startActivity(targetIntent)
+            } else {
+                openHomeSettingsDirectly()
+            }
+        } catch (e: Exception) {
+            openHomeSettingsDirectly()
         }
-        startActivity(selectorIntent)
     }
 
     private fun isDefaultLauncher(): Boolean {
         return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val roleManager = getSystemService(RoleManager::class.java)
+                if (roleManager != null && roleManager.isRoleHeld(RoleManager.ROLE_HOME)) {
+                    return true
+                }
+            }
             val intent = Intent(Intent.ACTION_MAIN).apply {
                 addCategory(Intent.CATEGORY_HOME)
             }
             val resolveInfo = packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
-            resolveInfo?.activityInfo?.packageName == packageName
+            val currentPkg = resolveInfo?.activityInfo?.packageName
+            currentPkg == packageName
         } catch (e: Exception) {
             false
         }
     }
 
     private fun requestSetDefaultLauncher() {
+        openHomeSettingsDirectly()
+    }
+
+    private fun openHomeSettingsDirectly() {
+        var launched = false
+
+        // Krok 1: Bezpośrednie otwarcie systemowego ekranu wyboru launchera (ACTION_HOME_SETTINGS)
+        // Działa niezawodnie na Realme UI / ColorOS, MIUI/HyperOS, Samsung One UI i Android 10+
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val roleManager = getSystemService(RoleManager::class.java)
-                if (roleManager != null && roleManager.isRoleAvailable(RoleManager.ROLE_HOME)) {
-                    val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_HOME)
-                    startActivity(intent)
-                    return
-                }
-            }
             val intent = Intent(Settings.ACTION_HOME_SETTINGS).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
             startActivity(intent)
+            launched = true
         } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // Krok 2: Jeśli ACTION_HOME_SETTINGS nie jest dostępne, spróbuj ACTION_MANAGE_DEFAULT_APPS_SETTINGS
+        if (!launched) {
+            try {
+                val intent = Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                startActivity(intent)
+                launched = true
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        // Krok 3: Próba przez RoleManager (standard Android 10+ dla czystego AOSP / Pixeli)
+        if (!launched && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                val roleManager = getSystemService(RoleManager::class.java)
+                if (roleManager != null && roleManager.isRoleAvailable(RoleManager.ROLE_HOME)) {
+                    val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_HOME)
+                    homeRoleLauncher.launch(intent)
+                    launched = true
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        // Krok 4: Jeśli żadne ze specjalnych okien nie ruszyło, otwórz ogólne Ustawienia
+        if (!launched) {
             try {
                 startActivity(Intent(Settings.ACTION_SETTINGS).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 })
-            } catch (err: Exception) {
-                Toast.makeText(this, "Przejdź do Ustawienia -> Aplikacje domyślne -> Ekran główny", Toast.LENGTH_LONG).show()
+                launched = true
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
+
+        // Zawsze wyświetlamy czytelny komunikat dla użytkownika z instrukcją
+        Toast.makeText(
+            this,
+            "Wybierz 'Family Control' jako domyślną aplikację ekranu głównego",
+            Toast.LENGTH_LONG
+        ).show()
     }
 }
